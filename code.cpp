@@ -7,6 +7,10 @@
 #include <algorithm>
 #include "geometry.h"
 #include <string>
+using namespace std;
+int x = 0;
+int y = 0;
+string filename;
 
 struct Light {
     Light(const Vec3f& p, const float i) : position(p), intensity(i) {}
@@ -104,8 +108,8 @@ Vec3f cast_ray(const Vec3f& orig, const Vec3f& dir, const std::vector<Sphere>& s
 }
 
 void render(const std::vector<Sphere>& spheres, const std::vector<Light>& lights) {
-    const int   width = 400;
-    const int   height = 400;
+    const int   width = x;
+    const int   height = y;
     const float fov = M_PI / 3.;
     std::vector<Vec3f> framebuffer(width * height);
 
@@ -120,7 +124,7 @@ void render(const std::vector<Sphere>& spheres, const std::vector<Light>& lights
     }
 
     std::ofstream ofs; // save the framebuffer to file
-    ofs.open("./out3.ppm", std::ios::binary);
+    ofs.open("./" + filename, std::ios::binary);
     ofs << "P6\n" << width << " " << height << "\n255\n";
     for (size_t i = 0; i < height * width; ++i) {
         Vec3f& c = framebuffer[i];
@@ -133,28 +137,186 @@ void render(const std::vector<Sphere>& spheres, const std::vector<Light>& lights
     ofs.close();
 }
 
-int main() {
+int main(int argc, char** argv) {
 
-  
+    Vec3f camera;
+    Vec3f at;
+    Vec3f up;
+    int fovy;
+    int lightNumber = 0;
+    vector<string> lightss;
+    int pigmentNumber = 0;
+    vector<string> pigments;
+    int surfaceNumber = 0;
+    vector<string> surfaces;
+    int objectNumber = 0;
+    vector<string> objects;
 
-    //Material      ivory(1.0, Vec4f(0.6, 0.3, 0.1, 0.0), Vec3f(0.4, 0.4, 0.3), 50.);
-    //Material      glass(1.5, Vec4f(0.0, 0.5, 0.1, 0.8), Vec3f(0.6, 0.7, 0.8), 125.);
-    Material red_rubber(1.0, Vec4f(0.9, 0.1, 0.0, 0.0), Vec3f(0.3, 0.1, 0.1), 10.);
-    //Material     mirror(1.0, Vec4f(0.0, 10.0, 0.8, 0.0), Vec3f(1.0, 1.0, 1.0), 1425.);
-
-    std::vector<Sphere> spheres;
-    spheres.push_back(Sphere(Vec3f(1, 0, -8), 2, red_rubber));
-    spheres.push_back(Sphere(Vec3f(3, 5, -10), 3, red_rubber));
-    spheres.push_back(Sphere(Vec3f(10, -5, -25), 10, red_rubber));
-    spheres.push_back(Sphere(Vec3f(-10, 0, -25), 10, red_rubber));
+    ifstream file("test1.in");
+    if (file.is_open()) {
+        string line;
+        if (getline(file, line)) {
+            filename = line.c_str();
+        }
+        if (getline(file, line)) {
+            string size = line.c_str();
+            string xx = size.substr(0, size.find(" "));
+            string yy = size.substr(size.find(" "));
+            x = stoi(xx);
+            y = stoi(yy);
+        }
+        if (getline(file, line)) {
+            string cam = line.c_str();
+        }
+        if (getline(file, line)) {
+            string at = line.c_str();
+        }
+        if (getline(file, line)) {
+            string up = line.c_str();
+        }
+        if (getline(file, line)) {
+            fovy = stoi(line.c_str());
+        }
+        if (getline(file, line)) {
+            lightNumber = stoi(line.c_str());
+        }
+        for (int i = 0; i < lightNumber; i++) {
+            if (getline(file, line)) {
+                lightss.push_back(line.c_str());
+            }
+        }
+        if (getline(file, line)) {
+            pigmentNumber = stoi(line.c_str());
+        }
+        for (int i = 0; i < pigmentNumber; i++) {
+            if (getline(file, line)) {
+                pigments.push_back(line.c_str());
+            }
+        }
+        if (getline(file, line)) {
+            surfaceNumber = stoi(line.c_str());
+        }
+        for (int i = 0; i < surfaceNumber; i++) {
+            if (getline(file, line)) {
+                surfaces.push_back(line.c_str());
+            }
+        }
+        if (getline(file, line)) {
+            objectNumber = stoi(line.c_str());
+        }
+        for (int i = 0; i < objectNumber; i++) {
+            if (getline(file, line)) {
+                objects.push_back(line.c_str());
+            }
+        }
+        file.close();
+    }
 
     std::vector<Light>  lights;
-    lights.push_back(Light(Vec3f(0, 0, 0), 1.5));
-    //lights.push_back(Light(Vec3f(30, 50, -25), 1.8));
-    //lights.push_back(Light(Vec3f(30, 20, 30), 1.7));
+
+    for (int i = 0; i < lightNumber; i++) {
+        string lightNow = lightss[i];
+        int uzunluk = lightNow.substr(0, lightNow.find(" ")).length();
+        int x = stoi(lightNow.substr(0, lightNow.find(" ")));
+        lightNow = lightNow.substr(uzunluk);
+        while (lightNow.at(0) == ' ') {
+            lightNow = lightNow.substr(1);
+        }
+
+        uzunluk = lightNow.substr(0, lightNow.find(" ")).length();
+        int y = stoi(lightNow.substr(0, lightNow.find(" ")));
+        lightNow = lightNow.substr(uzunluk);
+        while (lightNow.at(0) == ' ') {
+            lightNow = lightNow.substr(1);
+        }
+
+        uzunluk = lightNow.substr(0, lightNow.find(" ")).length();
+        int z = stoi(lightNow.substr(0, lightNow.find(" ")));
+        lightNow = lightNow.substr(uzunluk);
+        while (lightNow.at(0) == ' ') {
+            lightNow = lightNow.substr(1);
+        }
+        cout << x << " " << y << " " << z << "\n";
+        lights.push_back(Light(Vec3f(x, y, z), 1));
+    }
+
+
+    for (int i = 0; i < objectNumber; i++) {
+        string obj = objects[i];
+        
+        int pigment = stoi(obj.substr(0, obj.find(" ")));
+        obj = obj.substr(obj.find(" ") + 1);
+        int surface = stoi(obj.substr(0, obj.find(" ")));
+        obj = obj.substr(obj.find(" ")+8);
+        while (obj.at(0) == ' ') {
+            obj = obj.substr(1);
+        }
+        int uznlk = obj.substr(0, obj.find(" ")).length();
+        int o1 = stoi(obj.substr(0, obj.find(" ")));
+        obj = obj.substr(uznlk);
+        while (obj.at(0) == ' ') {
+            obj = obj.substr(1);
+        }
+        uznlk = obj.substr(0, obj.find(" ")).length();
+        int o2 = stoi(obj.substr(0, obj.find(" ")));
+        obj = obj.substr(uznlk);
+        while (obj.at(0) == ' ') {
+            obj = obj.substr(1);
+        }
+        uznlk = obj.substr(0, obj.find(" ")).length();
+        int o3 = stoi(obj.substr(0, obj.find(" ")));
+        obj = obj.substr(uznlk);
+        while (obj.at(0) == ' ') {
+            obj = obj.substr(1);
+        }
+        int o4 = stoi(obj.substr(0, obj.find(" ")));
+
+        string pig = pigments[pigment];
+        string sur = surfaces[surface];
+
+        pig = pig.substr(8);
+        while (pig.at(0) == ' ') {
+            pig = pig.substr(1);
+        }
+        int r = stoi(pig.substr(0, 1));
+        pig = pig.substr(1);
+        while (pig.at(0) == ' ') {
+            pig = pig.substr(1);
+        }
+        int g = stoi(pig.substr(0, pig.find(" ")));
+        pig = pig.substr(1);
+        while (pig.at(0) == ' ') {
+            pig = pig.substr(1);
+        }
+        int b = stoi(pig.substr(0, pig.find(" ")));
+        pig = pig.substr(1);
+
+        // o1, o2, o3, o4
+        // r, g, b
+        // s1, s2, s3, s4
+
+    }
+    
+    //Material      ivory(1.0, Vec4f(0.6, 0.3, 0.1, 0.0), Vec3f(0.4, 0.4, 0.3), 50.);
+    //Material      glass(1.5, Vec4f(0.0, 0.5, 0.1, 0.8), Vec3f(0.6, 0.7, 0.8), 125.);
+    //Material red_rubber(1.0, Vec4f(0.4, 0.6, 0.0, 1), Vec3f(1, 0, 0), 10.);
+    //Material red_rubber(1.0, Vec4f(0.4, 0.6, 0.0, 0.0), Vec3f(1, 0, 0), 10.);
+    //Material     mirror(1.0, Vec4f(0.0, 10.0, 0.8, 0.0), Vec3f(1.0, 1.0, 1.0), 1425.);
+    /*
+    Material material1(1, Vec4f(0.4, 0.6, 0.0, 0), Vec3f(0, 1, 0), 1.);
+    Material material2(1, Vec4f(0.4, 0.6, 0.0, 0), Vec3f(1, 0, 0), 500.);
+    Material material3(1, Vec4f(0.4, 0.6, 0.0, 0), Vec3f(0, 0, 1), 500.);
+
+    std::vector<Sphere> spheres;
+    spheres.push_back(Sphere(Vec3f(1, 0, -8), 2, material1));
+    spheres.push_back(Sphere(Vec3f(3, 5, -10), 3, material2));
+    spheres.push_back(Sphere(Vec3f(10, -5, -25), 10, material3));
+    spheres.push_back(Sphere(Vec3f(-10, 0, -25), 10, material3));
+
+    
 
     render(spheres, lights);
-
+    */
     return 0;
 }
 
