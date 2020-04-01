@@ -8,3 +8,6 @@
 - Pigments adjust the colors.
 - Surfaces determine the surface of the objects.
 - Objects are drawn correctly.
+
+
+![Screenshot](https://github.com/msaidzengin/rayTracer/blob/master/ss.png?raw=true)
