@@ -11,6 +11,7 @@ using namespace std;
 int x = 0;
 int y = 0;
 string filename;
+float fov = 60;
 
 struct Light {
     Light(const Vec3f& p, const float i) : position(p), intensity(i) {}
@@ -52,12 +53,12 @@ Vec3f reflect(const Vec3f& I, const Vec3f& N) {
     return I - N * 2.f * (I * N);
 }
 
-Vec3f refract(const Vec3f& I, const Vec3f& N, const float eta_t, const float eta_i = 1.f) { // Snell's law
+Vec3f refract(const Vec3f& I, const Vec3f& N, const float eta_t, const float eta_i = 1.f) {
     float cosi = -std::max(-1.f, std::min(1.f, I * N));
-    if (cosi < 0) return refract(I, -N, eta_i, eta_t); // if the ray comes from the inside the object, swap the air and the media
+    if (cosi < 0) return refract(I, -N, eta_i, eta_t);
     float eta = eta_i / eta_t;
     float k = 1 - eta * eta * (1 - cosi * cosi);
-    return k < 0 ? Vec3f(1, 0, 0) : I * eta + N * (eta * cosi - sqrtf(k)); // k<0 = total reflection, no ray to refract. I refract it anyways, this has no physical meaning
+    return k < 0 ? Vec3f(1, 0, 0) : I * eta + N * (eta * cosi - sqrtf(k));
 }
 
 bool scene_intersect(const Vec3f& orig, const Vec3f& dir, const std::vector<Sphere>& spheres, Vec3f& hit, Vec3f& N, Material& material) {
@@ -71,7 +72,7 @@ bool scene_intersect(const Vec3f& orig, const Vec3f& dir, const std::vector<Sphe
             material = spheres[i].material;
         }
     }
-    
+
     return spheres_dist < 1000;
 }
 
@@ -80,12 +81,12 @@ Vec3f cast_ray(const Vec3f& orig, const Vec3f& dir, const std::vector<Sphere>& s
     Material material;
 
     if (depth > 4 || !scene_intersect(orig, dir, spheres, point, N, material)) {
-        return Vec3f(0.2, 0.7, 0.8); // background color
+        return Vec3f(0.5, 0.5, 0.5);
     }
 
     Vec3f reflect_dir = reflect(dir, N).normalize();
     Vec3f refract_dir = refract(dir, N, material.refractive_index).normalize();
-    Vec3f reflect_orig = reflect_dir * N < 0 ? point - N * 1e-3 : point + N * 1e-3; // offset the original point to avoid occlusion by the object itself
+    Vec3f reflect_orig = reflect_dir * N < 0 ? point - N * 1e-3 : point + N * 1e-3;
     Vec3f refract_orig = refract_dir * N < 0 ? point - N * 1e-3 : point + N * 1e-3;
     Vec3f reflect_color = cast_ray(reflect_orig, reflect_dir, spheres, lights, depth + 1);
     Vec3f refract_color = cast_ray(refract_orig, refract_dir, spheres, lights, depth + 1);
@@ -95,7 +96,7 @@ Vec3f cast_ray(const Vec3f& orig, const Vec3f& dir, const std::vector<Sphere>& s
         Vec3f light_dir = (lights[i].position - point).normalize();
         float light_distance = (lights[i].position - point).norm();
 
-        Vec3f shadow_orig = light_dir * N < 0 ? point - N * 1e-3 : point + N * 1e-3; // checking if the point lies in the shadow of the lights[i]
+        Vec3f shadow_orig = light_dir * N < 0 ? point - N * 1e-3 : point + N * 1e-3;
         Vec3f shadow_pt, shadow_N;
         Material tmpmaterial;
         if (scene_intersect(shadow_orig, light_dir, spheres, shadow_pt, shadow_N, tmpmaterial) && (shadow_pt - shadow_orig).norm() < light_distance)
@@ -110,20 +111,19 @@ Vec3f cast_ray(const Vec3f& orig, const Vec3f& dir, const std::vector<Sphere>& s
 void render(const std::vector<Sphere>& spheres, const std::vector<Light>& lights) {
     const int   width = x;
     const int   height = y;
-    const float fov = M_PI / 3.;
     std::vector<Vec3f> framebuffer(width * height);
 
 #pragma omp parallel for
-    for (size_t j = 0; j < height; j++) { // actual rendering loop
+    for (size_t j = 0; j < height; j++) {
         for (size_t i = 0; i < width; i++) {
             float dir_x = (i + 0.5) - width / 2.;
-            float dir_y = -(j + 0.5) + height / 2.;    // this flips the image at the same time
+            float dir_y = -(j + 0.5) + height / 2.;
             float dir_z = -height / (2. * tan(fov / 2.));
             framebuffer[i + j * width] = cast_ray(Vec3f(0, 0, 0), Vec3f(dir_x, dir_y, dir_z).normalize(), spheres, lights);
         }
     }
 
-    std::ofstream ofs; // save the framebuffer to file
+    std::ofstream ofs;
     ofs.open("./" + filename, std::ios::binary);
     ofs << "P6\n" << width << " " << height << "\n255\n";
     for (size_t i = 0; i < height * width; ++i) {
@@ -142,7 +142,6 @@ int main(int argc, char** argv) {
     Vec3f camera;
     Vec3f at;
     Vec3f up;
-    int fovy;
     int lightNumber = 0;
     vector<string> lightss;
     int pigmentNumber = 0;
@@ -175,7 +174,7 @@ int main(int argc, char** argv) {
             string up = line.c_str();
         }
         if (getline(file, line)) {
-            fovy = stoi(line.c_str());
+            fov = stoi(line.c_str());
         }
         if (getline(file, line)) {
             lightNumber = stoi(line.c_str());
@@ -236,18 +235,20 @@ int main(int argc, char** argv) {
         while (lightNow.at(0) == ' ') {
             lightNow = lightNow.substr(1);
         }
-        cout << x << " " << y << " " << z << "\n";
+
         lights.push_back(Light(Vec3f(x, y, z), 1));
     }
 
+    std::vector<Sphere> spheres;
 
     for (int i = 0; i < objectNumber; i++) {
+
         string obj = objects[i];
-        
+
         int pigment = stoi(obj.substr(0, obj.find(" ")));
         obj = obj.substr(obj.find(" ") + 1);
         int surface = stoi(obj.substr(0, obj.find(" ")));
-        obj = obj.substr(obj.find(" ")+8);
+        obj = obj.substr(obj.find(" ") + 8);
         while (obj.at(0) == ' ') {
             obj = obj.substr(1);
         }
@@ -272,51 +273,66 @@ int main(int argc, char** argv) {
         int o4 = stoi(obj.substr(0, obj.find(" ")));
 
         string pig = pigments[pigment];
-        string sur = surfaces[surface];
-
         pig = pig.substr(8);
         while (pig.at(0) == ' ') {
             pig = pig.substr(1);
         }
-        int r = stoi(pig.substr(0, 1));
-        pig = pig.substr(1);
+
+        int uu = pig.substr(0, pig.find(" ")).length();
+        float r = stof(pig.substr(0, pig.find(" ")));
+        pig = pig.substr(uu);
         while (pig.at(0) == ' ') {
             pig = pig.substr(1);
         }
-        int g = stoi(pig.substr(0, pig.find(" ")));
-        pig = pig.substr(1);
+        uu = pig.substr(0, pig.find(" ")).length();
+        float g = stof(pig.substr(0, pig.find(" ")));
+        pig = pig.substr(uu);
         while (pig.at(0) == ' ') {
             pig = pig.substr(1);
         }
-        int b = stoi(pig.substr(0, pig.find(" ")));
-        pig = pig.substr(1);
+        uu = pig.substr(0, pig.find(" ")).length();
+        float b = stof(pig.substr(0, pig.find(" ")));
+
+        string sur = surfaces[surface];
+
+        int uznluk = sur.substr(0, sur.find(" ")).length();
+        float s1 = stof(sur.substr(0, sur.find(" ")));
+        sur = sur.substr(uznluk);
+        while (sur.at(0) == ' ') {
+            sur = sur.substr(1);
+        }
+        uznluk = sur.substr(0, sur.find(" ")).length();
+        float s2 = stof(sur.substr(0, sur.find(" ")));
+        sur = sur.substr(uznluk);
+        while (sur.at(0) == ' ') {
+            sur = sur.substr(1);
+        }
+        uznluk = sur.substr(0, sur.find(" ")).length();
+        float s3 = stof(sur.substr(0, sur.find(" ")));
+        sur = sur.substr(uznluk);
+        while (sur.at(0) == ' ') {
+            sur = sur.substr(1);
+        }
+        uznluk = sur.substr(0, sur.find(" ")).length();
+        int s4 = stoi(sur.substr(0, sur.find(" ")));
+        sur = sur.substr(uznluk);
+        while (sur.at(0) == ' ') {
+            sur = sur.substr(1);
+        }
+        float s5 = stof(sur);
 
         // o1, o2, o3, o4
         // r, g, b
-        // s1, s2, s3, s4
+        // s1, s2, s3, s4, s5
+
+        float refractive = 0;
+
+        Material material(1, Vec4f(s1, s2, s5, refractive), Vec3f(r, g, b), s4);
+        spheres.push_back(Sphere(Vec3f(o1, o2, o3), o4, material));
 
     }
-    
-    //Material      ivory(1.0, Vec4f(0.6, 0.3, 0.1, 0.0), Vec3f(0.4, 0.4, 0.3), 50.);
-    //Material      glass(1.5, Vec4f(0.0, 0.5, 0.1, 0.8), Vec3f(0.6, 0.7, 0.8), 125.);
-    //Material red_rubber(1.0, Vec4f(0.4, 0.6, 0.0, 1), Vec3f(1, 0, 0), 10.);
-    //Material red_rubber(1.0, Vec4f(0.4, 0.6, 0.0, 0.0), Vec3f(1, 0, 0), 10.);
-    //Material     mirror(1.0, Vec4f(0.0, 10.0, 0.8, 0.0), Vec3f(1.0, 1.0, 1.0), 1425.);
-    /*
-    Material material1(1, Vec4f(0.4, 0.6, 0.0, 0), Vec3f(0, 1, 0), 1.);
-    Material material2(1, Vec4f(0.4, 0.6, 0.0, 0), Vec3f(1, 0, 0), 500.);
-    Material material3(1, Vec4f(0.4, 0.6, 0.0, 0), Vec3f(0, 0, 1), 500.);
-
-    std::vector<Sphere> spheres;
-    spheres.push_back(Sphere(Vec3f(1, 0, -8), 2, material1));
-    spheres.push_back(Sphere(Vec3f(3, 5, -10), 3, material2));
-    spheres.push_back(Sphere(Vec3f(10, -5, -25), 10, material3));
-    spheres.push_back(Sphere(Vec3f(-10, 0, -25), 10, material3));
-
-    
 
     render(spheres, lights);
-    */
+
     return 0;
 }
-
